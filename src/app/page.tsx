@@ -2,16 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import WaveSurfer from 'wavesurfer.js';
-import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js'
+import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
 
 export default function AudioPage() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const wavesurferRef = useRef<WaveSurfer | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [zoomLevel, setZoomLevel] = useState(1)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   useEffect(() => {
     if (!audioFile || !containerRef.current) return;
@@ -22,11 +23,12 @@ export default function AudioPage() {
       wavesurferRef.current.destroy();
     }
 
-    wavesurferRef.current = WaveSurfer.create({
+    const wavesurfer = WaveSurfer.create({
       container: containerRef.current,
       waveColor: '#888',
       progressColor: '#a855f7',
-      cursorColor: '#fff',
+      cursorColor: '#ffffff',
+      cursorWidth: 2,
       barWidth: 2,
       height: 100,
       normalize: true,
@@ -35,7 +37,7 @@ export default function AudioPage() {
         TimelinePlugin.create({
           container: timelineRef.current!,
           height: 20,
-          insertPosition: 'afterend', // place it below the waveform
+          insertPosition: 'afterend',
           timeInterval: 1,
           primaryLabelInterval: 10,
           secondaryLabelInterval: 10,
@@ -54,11 +56,14 @@ export default function AudioPage() {
       ],
     });
 
-    wavesurferRef.current.load(url);
-    wavesurferRef.current.on('finish', () => setIsPlaying(false));
+    wavesurfer.load(url);
+    wavesurferRef.current = wavesurfer;
+
+    wavesurfer.on('finish', () => setIsPlaying(false));
+    wavesurfer.on('interaction', () => setIsPlaying(false));
 
     return () => {
-      wavesurferRef.current?.destroy();
+      wavesurfer.destroy();
     };
   }, [audioFile]);
 
@@ -87,8 +92,9 @@ export default function AudioPage() {
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-gray-100 flex flex-col items-center justify-center p-6">
       <div className="flex flex-col gap-2 text-2xl font-semibold mb-4 text-center">
-        <p className='text-5xl'>🎵</p>
-        <h1>Inspired Audio Player</h1></div>
+        <p className="text-5xl">🎵</p>
+        <h1>Inspired Audio Player</h1>
+      </div>
 
       <input
         ref={fileInputRef}
@@ -108,40 +114,43 @@ export default function AudioPage() {
       <div className="mt-6 w-full max-w-[80%] cursor-pointer">
         <div ref={containerRef} className="w-full bg-[#1a1a1a] rounded" />
         <div ref={timelineRef} className="w-full text-sm text-gray-300" />
-        {audioFile && <div className="flex items-center gap-4 mt-6 px-4 max-w-[60%] mx-auto">
-          <label htmlFor="zoom" className="text-sm text-gray-300 whitespace-nowrap">Zoom</label>
-          <input
-            id="zoom"
-            type="range"
-            min="1"
-            max="200"
-            value={zoomLevel}
-            onChange={(e) => {
-              const zoom = Number(e.target.value)
-              setZoomLevel(zoom)
-              wavesurferRef.current?.zoom(zoom)
-            }}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-          />
-          <span className="text-sm text-gray-400 w-10 text-right">{zoomLevel}</span>
-        </div>}
 
         {audioFile && (
-          <div className="flex flex-col space-y-4 items-center mt-4">
-            <button
-              onClick={togglePlay}
-              className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
-            >
-              {isPlaying ? 'Pause' : 'Play'}
-            </button>
+          <>
+            <div className="flex items-center gap-4 mt-6 px-4 max-w-[60%] mx-auto">
+              <label htmlFor="zoom" className="text-sm text-gray-300 whitespace-nowrap">Zoom</label>
+              <input
+                id="zoom"
+                type="range"
+                min="1"
+                max="200"
+                value={zoomLevel}
+                onChange={(e) => {
+                  const zoom = Number(e.target.value);
+                  setZoomLevel(zoom);
+                  wavesurferRef.current?.zoom(zoom);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              />
+              <span className="text-sm text-gray-400 w-10 text-right">{zoomLevel}</span>
+            </div>
 
-            <button
-              onClick={clearTrack}
-              className="cursor-pointer bg-transparent text-sm text-red-400 hover:text-red-700 underline transition"
-            >
-              Clear Tracks
-            </button>
-          </div>
+            <div className="flex flex-col space-y-4 items-center mt-4">
+              <button
+                onClick={togglePlay}
+                className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+              >
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+
+              <button
+                onClick={clearTrack}
+                className="cursor-pointer bg-transparent text-sm text-red-400 hover:text-red-700 underline transition"
+              >
+                Clear Tracks
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
