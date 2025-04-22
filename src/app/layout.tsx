@@ -1,5 +1,4 @@
 import { ThemeProvider } from "@/shared/context";
-import { GTProvider } from "gt-next";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
