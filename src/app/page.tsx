@@ -60,7 +60,6 @@ export default function AudioPage() {
     wavesurferRef.current = wavesurfer;
 
     wavesurfer.on('finish', () => setIsPlaying(false));
-    wavesurfer.on('interaction', () => setIsPlaying(false));
 
     return () => {
       wavesurfer.destroy();
