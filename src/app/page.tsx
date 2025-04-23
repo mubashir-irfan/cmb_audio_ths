@@ -1,145 +1,198 @@
-"use client";
+'use client';
 
-import React, { useRef, useState, useEffect } from "react";
-import WaveSurfer from "wavesurfer.js";
-import TimelinePlugin from "wavesurfer.js/dist/plugins/timeline.esm.js";
+import { useEffect, useRef, useState } from 'react';
+import WaveSurfer from 'wavesurfer.js';
+import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
 
 export default function AudioPage() {
-  const [audioFiles, setAudioFiles] = useState<File[]>([]);
-  const [wavesurfers, setWavesurfers] = useState<WaveSurfer[]>([]);
-  const [readyStates, setReadyStates] = useState<boolean[]>([]);
-  const [durations, setDurations] = useState<number[]>([]);
-  const [longestDuration, setLongestDuration] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+
+  const [audioFile, setAudioFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const containerRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const timelineRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [cursorX, setCursorX] = useState(0);
 
-  // Clean up all WaveSurfer instances on unmount or file change
   useEffect(() => {
-    return () => {
-      wavesurfers.forEach(ws => ws && ws.destroy());
-    };
-  }, [wavesurfers]);
+    if (!audioFile || !containerRef.current) return;
 
-  // Create WaveSurfer instances for all audio files
-  useEffect(() => {
-    // Destroy previous instances
-    wavesurfers.forEach(ws => ws && ws.destroy());
-    const newWavesurfers: WaveSurfer[] = [];
-    const newReadyStates: boolean[] = [];
-    const newDurations: number[] = [];
-    audioFiles.forEach((file, idx) => {
-      if (!containerRefs.current[idx] || !timelineRef.current) return;
-      const ws = WaveSurfer.create({
-        container: containerRefs.current[idx],
-        waveColor: "#888",
-        progressColor: "#a855f7",
-        cursorColor: "#fff",
-        barWidth: 2,
-        height: 100,
-        normalize: true,
-        backend: "MediaElement",
-        plugins: idx === 0 ? [TimelinePlugin.create({ container: timelineRef.current, height: 20 })] : [],
-      });
-      ws.load(URL.createObjectURL(file));
-      ws.on("ready", () => {
-        newReadyStates[idx] = true;
-        newDurations[idx] = ws.getDuration();
-        setReadyStates([...newReadyStates]);
-        setDurations([...newDurations]);
-      });
-      ws.on("finish", () => setIsPlaying(false));
-      newWavesurfers[idx] = ws;
+    const url = URL.createObjectURL(audioFile);
+
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+    }
+
+    const wavesurfer = WaveSurfer.create({
+      container: containerRef.current,
+      waveColor: '#888',
+      progressColor: '#a855f7',
+      cursorColor: 'transparent', // Hide built-in cursor
+      cursorWidth: 2,
+      barWidth: 2,
+      height: 100,
+      normalize: true,
+      backend: 'MediaElement',
+      plugins: [
+        TimelinePlugin.create({
+          container: timelineRef.current!,
+          height: 20,
+          insertPosition: 'afterend',
+          timeInterval: 1,
+          primaryLabelInterval: 10,
+          secondaryLabelInterval: 10,
+          style: {
+            color: '#ccc',
+            fontSize: '12px',
+            padding: '4px',
+          },
+          secondaryLabelOpacity: 0,
+          formatTimeCallback: (s) => {
+            const minutes = Math.floor(s / 60);
+            const seconds = Math.floor(s % 60).toString().padStart(2, '0');
+            return `${minutes}:${seconds}`;
+          },
+        }),
+      ],
     });
-    setWavesurfers(newWavesurfers);
-    setReadyStates(Array(audioFiles.length).fill(false));
-    setDurations(Array(audioFiles.length).fill(0));
-    // eslint-disable-next-line
-  }, [audioFiles]);
 
-  // Update longest duration when durations change
-  useEffect(() => {
-    if (durations.length > 0) {
-      setLongestDuration(Math.max(...durations));
-    } else {
-      setLongestDuration(0);
-    }
-  }, [durations]);
+    wavesurfer.load(url);
+    wavesurferRef.current = wavesurfer;
 
-  // Play/pause all tracks
+    wavesurfer.on('audioprocess', (currentTime: number) => {
+      if (!containerRef.current || !wavesurferRef.current) return;
+      const duration = wavesurferRef.current.getDuration();
+      const width = containerRef.current.offsetWidth;
+      const x = (currentTime / duration) * width;
+      setCursorX(x);
+    });
+
+    // Reset cursor when audio is loaded
+    wavesurfer.on('ready', () => {
+      setCursorX(0);
+    });
+
+    // Update cursor on interaction (click or drag)
+    wavesurfer.on('interaction', (newTime: number) => {
+      if (!wavesurferRef.current || !containerRef.current) return;
+      const duration = wavesurferRef.current.getDuration();
+      const width = containerRef.current.offsetWidth;
+      const x = (newTime / duration) * width;
+      setCursorX(x);
+    });
+
+    wavesurfer.on('finish', () => {
+      setCursorX(containerRef.current?.offsetWidth || 0);
+      setIsPlaying(false)
+    });
+
+    return () => {
+      wavesurfer.destroy();
+    };
+  }, [audioFile]);
+
   const togglePlay = () => {
-    if (wavesurfers.length === 0 || readyStates.some(r => !r)) return;
-    if (isPlaying) {
-      wavesurfers.forEach(ws => ws && ws.pause());
-      setIsPlaying(false);
-    } else {
-      // Sync all to 0 or to the min currentTime
-      const minTime = Math.min(...wavesurfers.map(ws => ws.getCurrentTime()));
-      wavesurfers.forEach(ws => ws && ws.setTime(minTime));
-      wavesurfers.forEach(ws => ws && ws.play());
-      setIsPlaying(true);
-    }
+    if (!wavesurferRef.current) return;
+    wavesurferRef.current.playPause();
+    setIsPlaying((prev) => !prev);
   };
 
-  // File select handler
+  const clearTrack = () => {
+    wavesurferRef.current?.stop();
+    wavesurferRef.current?.destroy();
+    wavesurferRef.current = null;
+    setAudioFile(null);
+    setIsPlaying(false);
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length > 0) {
-      setAudioFiles(prev => [...prev, ...files]);
+    const file = e.target.files?.[0];
+    if (file) {
+      setAudioFile(file);
+      setIsPlaying(false);
     }
   };
 
-  // Render stacked waveform containers
-  const renderWaveforms = () =>
-    audioFiles.map((file, idx) => (
-      <div key={idx} style={{ position: "relative", width: "100%", height: 100, marginBottom: 8, background: "#181818", borderRadius: 8, overflow: "hidden" }}>
-        <div
-          ref={el => {
-            containerRefs.current[idx] = el;
-            return undefined;
-          }}
-          className="w-full h-full"
-          style={{ width: durations[idx] && longestDuration ? `${(durations[idx] / longestDuration) * 100}%` : "100%", height: "100%", position: "absolute", left: 0, top: 0 }}
-        />
-        <div style={{ position: "absolute", left: 8, top: 8, color: "#ccc", fontSize: 12, background: "#222", borderRadius: 4, padding: "2px 8px", zIndex: 2 }}>{file.name}</div>
-      </div>
-    ));
+  console.log('prerender', {
+    cursorX
+  })
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-gray-100 flex flex-col items-center justify-center p-6">
       <div className="flex flex-col gap-2 text-2xl font-semibold mb-4 text-center">
-        <span>Multi-Track Audio Player</span>
+        <p className="text-5xl">🎵</p>
+        <h1>Inspired Audio Player</h1>
       </div>
+
       <input
         ref={fileInputRef}
         type="file"
         accept="audio/*"
-        multiple
         onChange={handleFileSelect}
         className="hidden"
       />
+
       <button
         onClick={() => fileInputRef.current?.click()}
         className="bg-gray-800 text-white px-6 py-2 rounded hover:bg-gray-700 transition"
       >
-        Upload Audio(s)
+        Upload Track
       </button>
-      <div className="mt-6 w-full max-w-[80%] flex flex-col gap-2">
-        <div
-          ref={timelineRef}
-          className="w-full text-sm text-gray-300 mb-2"
-        />
-        {renderWaveforms()}
-        {audioFiles.length > 0 && (
-          <div className="flex flex-col space-y-4 items-center mt-4">
-            <button
-              onClick={togglePlay}
-              className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-          </div>
+
+      <div className="mt-6 w-full max-w-[80%] cursor-pointer">
+        {/* Waveform Container */}
+        <div className="relative w-full bg-[#1a1a1a] rounded">
+          <div ref={containerRef} className="w-full" />
+          {audioFile && (
+            <div
+              className="absolute top-0 bottom-0 w-[2px] bg-purple-500 pointer-events-none"
+              style={{ left: `${cursorX}px` }}
+            />
+          )}
+        </div>
+
+        {/* Timeline Container */}
+        <div ref={timelineRef} className="w-full text-sm text-gray-300" />
+
+        {audioFile && (
+          <>
+            <div className="flex items-center gap-4 mt-6 px-4 max-w-[60%] mx-auto">
+              <label htmlFor="zoom" className="text-sm text-gray-300 whitespace-nowrap">
+                Zoom
+              </label>
+              <input
+                id="zoom"
+                type="range"
+                min="1"
+                max="200"
+                value={zoomLevel}
+                onChange={(e) => {
+                  const zoom = Number(e.target.value);
+                  setZoomLevel(zoom);
+                  wavesurferRef.current?.zoom(zoom);
+                }}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              />
+              <span className="text-sm text-gray-400 w-10 text-right">{zoomLevel}</span>
+            </div>
+
+            <div className="flex flex-col space-y-4 items-center mt-4">
+              <button
+                onClick={togglePlay}
+                className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+              >
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+
+              <button
+                onClick={clearTrack}
+                className="cursor-pointer bg-transparent text-sm text-red-400 hover:text-red-700 underline transition"
+              >
+                Clear Tracks
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
