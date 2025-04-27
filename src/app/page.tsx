@@ -88,15 +88,18 @@ export default function HomePage() {
           />
 
           {/* Timeline */}
-          <div ref={timelineRef} className="relative w-full h-10 mt-2">
-            <div className="w-full h-1 bg-gray-600 rounded relative">
+          <div ref={timelineRef} className="relative w-full h-12 mt-2">
+            <div className="w-full h-1 bg-gradient-to-r from-teal-600 via-teal-500 to-teal-600 rounded-full shadow-lg">
               {/* Timeline ticks */}
               {generateTicks().map((time, index) => {
                 const isPrimary = time % 30 === 0;
+                const isSecondary = time % 15 === 0;
                 return (
                   <div
                     key={index}
-                    className="absolute"
+                    className={`absolute transition-transform duration-150 hover:scale-110 group ${
+                      isPrimary ? 'z-20' : isSecondary ? 'z-10' : 'z-0'
+                    }`}
                     style={{
                       left: `${(time / audioDuration) * 100}%`,
                       transform: 'translateX(-50%)',
@@ -104,12 +107,28 @@ export default function HomePage() {
                   >
                     {/* Tick line */}
                     <div
-                      className={`bg-gray-300 ${isPrimary ? 'h-6 w-0.5' : 'h-3 w-px'
-                        }`}
+                      className={`
+                        ${isPrimary 
+                          ? 'h-6 w-0.5 bg-teal-300' 
+                          : isSecondary 
+                            ? 'h-4 w-px bg-teal-400/70'
+                            : 'h-2 w-px bg-teal-400/50'
+                        }
+                        transition-all duration-150
+                        group-hover:bg-teal-200
+                      `}
                     />
                     {/* Time label */}
-                    {isPrimary && (
-                      <div className="text-xs text-gray-400 mt-1 text-center">
+                    {(isPrimary || isSecondary) && (
+                      <div className={`
+                        text-xs font-medium mt-1 text-center
+                        transition-all duration-150
+                        ${isPrimary 
+                          ? 'text-teal-300' 
+                          : 'text-teal-400/70 text-[0.65rem]'
+                        }
+                        group-hover:text-teal-200
+                      `}>
                         {formatTime(time)}
                       </div>
                     )}
