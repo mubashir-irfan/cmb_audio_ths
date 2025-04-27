@@ -1,38 +1,65 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import WaveSurfer from 'wavesurfer.js';
 
 export default function HomePage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioDuration, setAudioDuration] = useState<number>(0);
-  const [cursorPosition, setCursorPosition] = useState<number>(0); // 0 to 1 (percentage)
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setAudioFile(file);
+  };
 
-    const audio = document.createElement('audio');
-    audio.src = URL.createObjectURL(file);
+  const handlePlayPause = () => {
+    if (!wavesurferRef.current) return;
+    wavesurferRef.current.playPause();
+    setIsPlaying((prev) => !prev);
+  };
 
-    audio.onloadedmetadata = () => {
-      setAudioDuration(audio.duration);
+  // Initialize wavesurfer when file changes
+  useEffect(() => {
+    if (!audioFile || !containerRef.current) return;
+
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+    }
+
+    const wavesurfer = WaveSurfer.create({
+      container: containerRef.current,
+      waveColor: '#6ee7b7', // teal-300
+      progressColor: '#14b8a6', // teal-500
+      cursorColor: 'red',
+      barWidth: 2,
+      height: 128,
+      normalize: true,
+    });
+
+    wavesurfer.loadBlob(audioFile);
+
+    wavesurfer.on('ready', () => {
+      setAudioDuration(wavesurfer.getDuration());
+    });
+
+    wavesurfer.on('finish', () => {
+      setIsPlaying(false);
+    });
+
+    wavesurferRef.current = wavesurfer;
+
+    return () => {
+      wavesurfer.destroy();
     };
-  };
+  }, [audioFile]);
 
-  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-    if (!containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = Math.min(Math.max(clickX / rect.width, 0), 1);
-
-    setCursorPosition(percentage);
-  };
-
-  // Dynamically generate timeline ticks
+  // Generate timeline ticks
   const generateTicks = () => {
     const ticks = [];
     for (let time = 0; time <= audioDuration; time += 5) {
@@ -43,7 +70,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-start p-8 gap-8">
-      <h1 className="text-2xl font-semibold">Custom Audio Player</h1>
+      <h1 className="text-2xl font-semibold">Custom Audio Editor</h1>
 
       <input
         type="file"
@@ -53,25 +80,15 @@ export default function HomePage() {
       />
 
       {audioFile && (
-        <div className="flex flex-col items-center gap-4 w-full max-w-3xl mt-8">
-          {/* Container with Cursor */}
+        <div className="flex flex-col items-center gap-6 w-full max-w-4xl mt-8">
+          {/* Waveform container */}
           <div
             ref={containerRef}
-            onClick={handleContainerClick}
-            className="relative w-full h-32 bg-gray-800 rounded-md cursor-pointer overflow-hidden"
-          >
-            {/* Cursor */}
-            <div
-              className="absolute top-0 bottom-0 w-1 bg-red-500"
-              style={{
-                left: `${cursorPosition * 100}%`,
-                transform: 'translateX(-50%)',
-              }}
-            />
-          </div>
+            className="w-full h-32 bg-gray-800 rounded-md overflow-hidden"
+          />
 
           {/* Timeline */}
-          <div className="relative w-full h-10 mt-2">
+          <div ref={timelineRef} className="relative w-full h-10 mt-2">
             <div className="w-full h-1 bg-gray-600 rounded relative">
               {/* Timeline ticks */}
               {generateTicks().map((time, index) => {
@@ -101,6 +118,14 @@ export default function HomePage() {
               })}
             </div>
           </div>
+
+          {/* Play/Pause Button */}
+          <button
+            onClick={handlePlayPause}
+            className="bg-teal-500 hover:bg-teal-400 text-black font-bold py-2 px-6 rounded"
+          >
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
         </div>
       )}
     </div>
